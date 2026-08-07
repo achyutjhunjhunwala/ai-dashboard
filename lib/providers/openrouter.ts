@@ -7,12 +7,14 @@ import type { DailySpend, ModelBreakdown, ProviderUsage } from '../types';
 import { fetchJson } from './http';
 import type { ProviderAdapter } from './types';
 
+/*
 type OpenRouterCreditsResponse = {
   data?: {
     total_credits?: number;
     total_usage?: number;
   };
 };
+*/
 
 type OpenRouterKeyResponse = {
   data?: {
@@ -37,11 +39,13 @@ type OpenRouterActivityItem = {
   usage: number;
 };
 
+/*
 type OpenRouterCredits = {
   totalCredits: number;
   lifetimeUsage: number;
   creditBalance: number | null;
 };
+*/
 
 type OpenRouterKeySpend = {
   keyCreditsSpend: number;
@@ -133,7 +137,7 @@ function createOpenRouterAdapter(
 
       try {
         const keySpend = apiKey ? await fetchKeySpend(apiKey) : null;
-        const credits = await fetchCredits(authKey).catch(() => null);
+        // const credits = await fetchCredits(authKey).catch(() => null);
         const snapshotSummary = keySpend
           ? await saveAndSummarizeKeySpendSnapshot(
               keySnapshotFile,
@@ -169,8 +173,8 @@ function createOpenRouterAdapter(
           requestCount: activity.ok ? activity.summary.requestCount : undefined,
           metadata: {
             keyLifetimeSpend: keySpend?.keyLifetimeSpend ?? null,
-            totalCredits: credits?.totalCredits ?? null,
-            lifetimeUsage: credits?.lifetimeUsage ?? null,
+            // totalCredits: credits?.totalCredits ?? null,
+            // lifetimeUsage: credits?.lifetimeUsage ?? null,
           },
         });
       } catch (error) {
@@ -250,6 +254,7 @@ async function fetchKeySpend(apiKey: string): Promise<OpenRouterKeySpend> {
   };
 }
 
+/*
 async function fetchCredits(apiKey: string): Promise<OpenRouterCredits> {
   const credits = await fetchJson<OpenRouterCreditsResponse>(
     'https://openrouter.ai/api/v1/credits',
@@ -275,6 +280,7 @@ async function fetchCredits(apiKey: string): Promise<OpenRouterCredits> {
     creditBalance: creditBalance >= 0 ? creditBalance : null,
   };
 }
+*/
 
 async function fetchActivity(
   apiKey: string,
