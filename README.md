@@ -17,8 +17,8 @@ Created with ❤️ in Berlin by **The Ui Guy**.
   - **Red/Crimson**: `≥ 80%` used (Urgent)
 - 🔑 **Standardized OpenRouter Key Tracking**: Support for tracking up to **3 separate OpenRouter API keys** simultaneously:
   - Primary: `OpenRouter` (Default standard environment variables)
-  - Secondary: `OpenRouter - AJR` (`_1` suffix)
-  - Tertiary: `OpenRouter - TGR` (`_2` suffix)
+  - Secondary: `OpenRouter - 1` (`_1` suffix)
+  - Tertiary: `OpenRouter - 2` (`_2` suffix)
 - 🍪 **Claude & Cursor Browser Sync**: Dynamically queries in-browser account summaries via standard cookies and request authorization, bypassing the lack of developer APIs.
 - 🔎 **Elasticsearch ES|QL Sync**: Live queries your Elasticsearch indices via custom ES|QL aggregations to calculate real-time Buildkite agent run costs for your repository fork.
 - 🛡️ **Zero Key Leaks**: Private credential variables are stored strictly in `.env`, and all cached usage summaries in `data/*.json` are completely gitignored.
@@ -38,8 +38,8 @@ cp .env.example .env
 Configure up to **3 API Keys** on your dashboard:
 
 - **Primary Key (`OpenRouter`)**: Uses `OPENROUTER_API_KEY` and optional `OPENROUTER_MONTHLY_BUDGET_USD` (Defaults to `$1,000.00` limit).
-- **Secondary Key (`AJR`)**: Uses `OPENROUTER_API_KEY_1` and optional `OPENROUTER_MONTHLY_BUDGET_USD_1` (Defaults to `$500.00` limit).
-- **Tertiary Key (`TGR`)**: Uses `OPENROUTER_API_KEY_2` and optional `OPENROUTER_MONTHLY_BUDGET_USD_2` (Defaults to `$500.00` limit).
+- **Secondary Key (`1`)**: Uses `OPENROUTER_API_KEY_1` and optional `OPENROUTER_MONTHLY_BUDGET_USD_1` (Defaults to `$500.00` limit).
+- **Tertiary Key (`2`)**: Uses `OPENROUTER_API_KEY_2` and optional `OPENROUTER_MONTHLY_BUDGET_USD_2` (Defaults to `$500.00` limit).
 
 ### 2. Open AI - Codex (ChatGPT Enterprise)
 

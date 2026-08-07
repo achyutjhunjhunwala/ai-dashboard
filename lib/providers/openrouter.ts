@@ -115,8 +115,8 @@ function createOpenRouterAdapter(
         if (isBase)
           budgetOverride = 1000; // Default main OpenRouter to 1000 USD
         else if (keySuffix === '1')
-          budgetOverride = 500; // Default AJR limit to 500
-        else if (keySuffix === '2') budgetOverride = 500; // Default TGR limit to 500
+          budgetOverride = 500; // Default OpenRouter - 1 limit to 500
+        else if (keySuffix === '2') budgetOverride = 500; // Default OpenRouter - 2 limit to 500
       }
 
       const authKey = apiKey ?? managementApiKey;
@@ -223,9 +223,9 @@ export function getOpenRouterAdapters(): ProviderAdapter[] {
       return createOpenRouterAdapter('3', '', 'OpenRouter');
     }
     if (suffix === '1') {
-      return createOpenRouterAdapter('1', '_1', 'OpenRouter - AJR');
+      return createOpenRouterAdapter('1', '_1', 'OpenRouter - 1');
     }
-    return createOpenRouterAdapter('2', '_2', 'OpenRouter - TGR');
+    return createOpenRouterAdapter('2', '_2', 'OpenRouter - 2');
   });
 }
 
