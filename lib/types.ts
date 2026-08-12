@@ -24,6 +24,7 @@ export type ProviderUsage = {
   spendUsd: number | null;
   remainingUsd: number | null;
   percentUsed: number | null;
+  spendToday: number | null;
   projectedMonthEndSpendUsd: number | null;
   promptTokens?: number;
   completionTokens?: number;

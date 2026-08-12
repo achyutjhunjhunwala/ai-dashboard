@@ -7,14 +7,12 @@ import type { DailySpend, ModelBreakdown, ProviderUsage } from '../types';
 import { fetchJson } from './http';
 import type { ProviderAdapter } from './types';
 
-/*
 type OpenRouterCreditsResponse = {
   data?: {
     total_credits?: number;
     total_usage?: number;
   };
 };
-*/
 
 type OpenRouterKeyResponse = {
   data?: {
@@ -39,13 +37,11 @@ type OpenRouterActivityItem = {
   usage: number;
 };
 
-/*
 type OpenRouterCredits = {
   totalCredits: number;
   lifetimeUsage: number;
   creditBalance: number | null;
 };
-*/
 
 type OpenRouterKeySpend = {
   keyCreditsSpend: number;
@@ -126,6 +122,7 @@ function createOpenRouterAdapter(
         return createOpenRouterUsage(providerId, displayName, {
           budgetUsd: budgetOverride,
           spendUsd: null,
+          spendToday: null,
           dailySpend: [],
           modelBreakdown: [],
           status: 'not_configured',
@@ -137,7 +134,7 @@ function createOpenRouterAdapter(
 
       try {
         const keySpend = apiKey ? await fetchKeySpend(apiKey) : null;
-        // const credits = await fetchCredits(authKey).catch(() => null);
+        const credits = await fetchCredits(authKey).catch(() => null);
         const snapshotSummary = keySpend
           ? await saveAndSummarizeKeySpendSnapshot(
               keySnapshotFile,
@@ -145,7 +142,7 @@ function createOpenRouterAdapter(
               startDate,
               endDate,
             )
-          : { spendUsd: null, dailySpend: [] };
+          : { spendUsd: null, spendToday: null, dailySpend: [] };
         const activity = managementApiKey
           ? await fetchActivity(managementApiKey, startDate, endDate)
           : ({
@@ -163,6 +160,7 @@ function createOpenRouterAdapter(
         return createOpenRouterUsage(providerId, displayName, {
           budgetUsd,
           spendUsd,
+          spendToday: snapshotSummary.spendToday,
           dailySpend,
           modelBreakdown: activity.ok ? activity.summary.modelBreakdown : [],
           status: activity.ok ? 'connected' : 'partial',
@@ -173,14 +171,15 @@ function createOpenRouterAdapter(
           requestCount: activity.ok ? activity.summary.requestCount : undefined,
           metadata: {
             keyLifetimeSpend: keySpend?.keyLifetimeSpend ?? null,
-            // totalCredits: credits?.totalCredits ?? null,
-            // lifetimeUsage: credits?.lifetimeUsage ?? null,
+            totalCredits: credits?.totalCredits ?? null,
+            lifetimeUsage: credits?.lifetimeUsage ?? null,
           },
         });
       } catch (error) {
         return createOpenRouterUsage(providerId, displayName, {
           budgetUsd: budgetOverride,
           spendUsd: null,
+          spendToday: null,
           dailySpend: [],
           modelBreakdown: [],
           status: 'error',
@@ -254,7 +253,6 @@ async function fetchKeySpend(apiKey: string): Promise<OpenRouterKeySpend> {
   };
 }
 
-/*
 async function fetchCredits(apiKey: string): Promise<OpenRouterCredits> {
   const credits = await fetchJson<OpenRouterCreditsResponse>(
     'https://openrouter.ai/api/v1/credits',
@@ -280,7 +278,6 @@ async function fetchCredits(apiKey: string): Promise<OpenRouterCredits> {
     creditBalance: creditBalance >= 0 ? creditBalance : null,
   };
 }
-*/
 
 async function fetchActivity(
   apiKey: string,
@@ -375,17 +372,33 @@ async function saveAndSummarizeKeySpendSnapshot(
   startDate: string,
   endDate: string,
 ) {
+  const todayStr = new Date().toISOString().slice(0, 10);
   const snapshot = {
     capturedAt: new Date().toISOString(),
-    date: new Date().toISOString().slice(0, 10),
+    date: todayStr,
     keyLifetimeSpend,
   };
   const snapshots = await saveKeySpendSnapshot(keySnapshotFile, snapshot);
   const monthSnapshots = snapshots.filter((item) => item.date >= startDate && item.date < endDate);
 
+  const todaySnapshots = monthSnapshots.filter((item) => item.date === todayStr);
+  let spendToday = 0;
+  if (todaySnapshots.length > 0) {
+    const latestToday = todaySnapshots[todaySnapshots.length - 1];
+    const priorSnapshots = snapshots.filter((item) => item.date < todayStr);
+    if (priorSnapshots.length > 0) {
+      const lastPrior = priorSnapshots[priorSnapshots.length - 1];
+      spendToday = Math.max(
+        0,
+        roundMoney(latestToday.keyLifetimeSpend - lastPrior.keyLifetimeSpend),
+      );
+    }
+  }
+
   if (monthSnapshots.length < 2) {
     return {
       spendUsd: 0,
+      spendToday,
       dailySpend: [],
     };
   }
@@ -395,6 +408,7 @@ async function saveAndSummarizeKeySpendSnapshot(
 
   return {
     spendUsd: roundMoney(Math.max(latest.keyLifetimeSpend - first.keyLifetimeSpend, 0)),
+    spendToday,
     dailySpend: monthSnapshots.slice(1).map((item, index) => ({
       date: item.date,
       spendUsd: roundMoney(
@@ -446,6 +460,7 @@ function createOpenRouterUsage(
   input: {
     budgetUsd: number | null;
     spendUsd: number | null;
+    spendToday: number | null;
     dailySpend: DailySpend[];
     modelBreakdown: ModelBreakdown[];
     status: ProviderUsage['status'];
@@ -467,6 +482,7 @@ function createOpenRouterUsage(
     billingPeriodEnd: endDate,
     budgetUsd: input.budgetUsd,
     spendUsd: input.spendUsd,
+    spendToday: input.spendToday,
     remainingUsd: budget.remainingUsd,
     percentUsed: budget.percentUsed,
     projectedMonthEndSpendUsd: projectMonthEndSpend(input.spendUsd),

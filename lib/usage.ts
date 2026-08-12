@@ -6,6 +6,7 @@ import { roundMoney } from './money';
 import { chatgptAdapter } from './providers/chatgpt';
 import { claudeAdapter } from './providers/claude';
 import { cursorAdapter } from './providers/cursor';
+import { copilotAdapter } from './providers/copilot';
 import { buildkiteAdapter } from './providers/buildkite';
 import { getOpenRouterAdapters } from './providers/openrouter';
 import type { DashboardData, ProviderUsage } from './types';
@@ -27,6 +28,14 @@ export async function getCurrentMonthUsage(): Promise<DashboardData> {
 
   if (hasCursor) {
     adapters.push(cursorAdapter);
+  }
+
+  const hasCopilot =
+    process.env.GITHUB_COPILOT_ACTIVE === 'true' ||
+    existsSync(path.join(process.cwd(), 'data', 'copilot-usage.json'));
+
+  if (hasCopilot) {
+    adapters.push(copilotAdapter);
   }
 
   const hasClaude =
@@ -52,13 +61,17 @@ export async function getCurrentMonthUsage(): Promise<DashboardData> {
   // 1. claude
   // 2. cursor_pro
   // 3. openrouter
-  // 4. everything else (openrouter_1, openrouter_2, chatgpt_enterprise)
-  // 5. buildkite (last)
+  // 4. chatgpt_enterprise (Codex)
+  // 5. github_copilot
+  // 6. everything else (openrouter_1, openrouter_2)
+  // 7. buildkite (last)
   const orderedProviders = [...providers].sort((a, b) => {
     const getOrderScore = (providerId: string) => {
       if (providerId === 'claude') return 1;
       if (providerId === 'cursor_pro') return 2;
       if (providerId === 'openrouter') return 3;
+      if (providerId === 'chatgpt_enterprise') return 4;
+      if (providerId === 'github_copilot') return 5;
       if (providerId === 'buildkite') return 99;
       return 10;
     };
@@ -73,8 +86,13 @@ export async function getCurrentMonthUsage(): Promise<DashboardData> {
     return providers.indexOf(a) - providers.indexOf(b);
   });
 
-  // Exclude Buildkite from overall USD budget and spend summaries
-  const usdProviders = providers.filter((p) => p.provider !== 'buildkite');
+  // Exclude Buildkite, GitHub Copilot, and Codex from overall USD budget and spend summaries
+  const usdProviders = providers.filter(
+    (p) =>
+      p.provider !== 'buildkite' &&
+      p.provider !== 'github_copilot' &&
+      p.provider !== 'chatgpt_enterprise',
+  );
 
   const totalBudgetUsd = sumNullable(usdProviders.map((provider) => provider.budgetUsd));
   const totalSpendUsd = sumNullable(usdProviders.map((provider) => provider.spendUsd));

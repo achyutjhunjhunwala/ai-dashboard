@@ -3,6 +3,7 @@ import path from 'path';
 
 import { getCurrentMonthWindow } from '../dates';
 import type { ProviderUsage } from '../types';
+import { calculateDailySpend } from './daily';
 import type { ProviderAdapter } from './types';
 
 const cursorUsagePath = path.join(process.cwd(), 'data', 'cursor-usage.json');
@@ -87,8 +88,9 @@ export const cursorAdapter: ProviderAdapter = {
     let requestsUsed = 0;
     let requestsTotal = 100000;
     let resetsAt = '2026-09-02T08:02:00.000Z';
-    let status: ProviderUsage['status'] = 'connected';
-    let syncMessage = 'Local offline integration for Cursor Pro account limits.';
+    let status: ProviderUsage['status'] = 'partial';
+    let syncMessage =
+      'Offline Mode: Using local cache. Configure CURSOR_COOKIE for real-time sync.';
 
     // Try reading cached file first to have fallbacks
     try {
@@ -146,7 +148,7 @@ export const cursorAdapter: ProviderAdapter = {
         syncMessage = 'Connected and syncing live requests usage via Cursor API.';
       } catch {
         status = 'error';
-        syncMessage = 'Latest data cannot be fetched as auth expired';
+        syncMessage = 'Session cookie has expired. Fallen back to static JSON file.';
       }
     }
 
@@ -160,6 +162,8 @@ export const cursorAdapter: ProviderAdapter = {
     const budgetUsd = Math.round((requestsTotal / 100) * 100) / 100;
     const remainingUsd = Math.round((budgetUsd - spendUsd) * 100) / 100;
 
+    const spendToday = await calculateDailySpend('cursor-snapshots.json', spendUsd);
+
     return {
       provider: 'cursor_pro',
       displayName: 'Cursor',
@@ -169,6 +173,7 @@ export const cursorAdapter: ProviderAdapter = {
       spendUsd,
       remainingUsd,
       percentUsed,
+      spendToday,
       projectedMonthEndSpendUsd: null,
       dailySpend: [],
       source: status === 'connected' ? 'api' : 'derived',

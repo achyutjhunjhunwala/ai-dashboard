@@ -4,6 +4,7 @@ import path from 'path';
 import { getCurrentMonthWindow } from '../dates';
 import { calculateBudgetFields, parseMoney, roundMoney } from '../money';
 import type { ProviderUsage } from '../types';
+import { calculateDailySpend } from './daily';
 import type { ProviderAdapter } from './types';
 
 const claudeUsagePath = path.join(process.cwd(), 'data', 'claude-usage.json');
@@ -33,8 +34,9 @@ export const claudeAdapter: ProviderAdapter = {
     let outputTokens = 0;
     let cacheReadTokens = 0;
     let requestCount = 0;
-    let status: ProviderUsage['status'] = 'connected';
-    let syncMessage = 'Live sync active with Claude.ai billing usage API.';
+    let status: ProviderUsage['status'] = 'partial';
+    let syncMessage =
+      'Offline Mode: Using local cache. Configure CLAUDE_COOKIE for real-time sync.';
 
     // Try reading cached file first to have fallbacks
     try {
@@ -128,11 +130,13 @@ export const claudeAdapter: ProviderAdapter = {
         syncMessage = 'Connected and syncing live billing spend via Claude.ai API.';
       } catch {
         status = 'error';
-        syncMessage = 'Latest data cannot be fetched as auth expired';
+        syncMessage = 'Session cookie has expired. Fallen back to static JSON file.';
       }
     }
 
     const budget = calculateBudgetFields(spendUsd, budgetOverride);
+
+    const spendToday = await calculateDailySpend('claude-snapshots.json', spendUsd);
 
     return {
       provider: 'claude',
@@ -143,6 +147,7 @@ export const claudeAdapter: ProviderAdapter = {
       spendUsd,
       remainingUsd: budget.remainingUsd,
       percentUsed: budget.percentUsed,
+      spendToday,
       projectedMonthEndSpendUsd: null,
       dailySpend: [],
       source: status === 'connected' ? 'api' : 'derived',

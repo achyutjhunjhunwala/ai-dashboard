@@ -9,11 +9,6 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
-  const codexProvider = data.providers.find((p) => p.provider === 'chatgpt_enterprise');
-  const codexUsed = codexProvider?.metadata?.creditsUsed ?? 0;
-  const codexTotal = codexProvider?.metadata?.creditsTotal ?? 5000;
-  const hasCodex = !!codexProvider && codexProvider.status !== 'not_configured';
-
   async function refreshUsage() {
     setIsRefreshing(true);
     setRefreshError(null);
@@ -81,9 +76,6 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
               {data.summary.totalBudgetUsd !== null ? (
                 <span style={{ fontSize: '1.2rem', color: 'var(--muted)' }}>
                   / {formatCurrency(data.summary.totalBudgetUsd)} limit
-                  {hasCodex
-                    ? ` and ${Number(codexUsed).toLocaleString()} / ${Number(codexTotal).toLocaleString()} Codex credits`
-                    : null}
                 </span>
               ) : null}
             </div>
@@ -140,7 +132,20 @@ function ProviderGrid({ providers }: { providers: ProviderUsage[] }) {
   return (
     <section className="providerGrid">
       {providers.map((provider) => (
-        <article className="providerCard" key={provider.provider}>
+        <article
+          className={`providerCard ${provider.status === 'error' ? 'providerCard-error' : ''}`}
+          key={provider.provider}
+          style={
+            provider.status === 'error'
+              ? {
+                  border: '1px solid #ef4444',
+                  boxShadow: '0 0 16px rgba(239, 68, 68, 0.15)',
+                  background:
+                    'linear-gradient(180deg, rgba(239, 68, 68, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%)',
+                }
+              : undefined
+          }
+        >
           <div className="providerHeader">
             <div>
               <h2>{provider.displayName}</h2>
@@ -148,7 +153,7 @@ function ProviderGrid({ providers }: { providers: ProviderUsage[] }) {
             <StatusBadge status={provider.status} />
           </div>
 
-          {provider.provider === 'chatgpt_enterprise' ? (
+          {provider.provider === 'github_copilot' ? (
             <div className="budgetOverview" style={{ marginTop: '22px', marginBottom: '10px' }}>
               <div
                 style={{
@@ -162,6 +167,82 @@ function ProviderGrid({ providers }: { providers: ProviderUsage[] }) {
                   Used:{' '}
                   <strong style={{ color: 'var(--foreground)' }}>
                     {Number(provider.metadata?.creditsUsed ?? 0).toLocaleString()} credits
+                    {provider.spendToday !== null && provider.spendToday > 0 ? (
+                      <span
+                        style={{
+                          color: 'var(--accent)',
+                          fontSize: '0.8rem',
+                          fontWeight: 500,
+                          marginLeft: '6px',
+                        }}
+                      >
+                        (+{Number(provider.spendToday / 0.01).toLocaleString()} credits today)
+                      </span>
+                    ) : null}
+                  </strong>
+                </span>
+                <span>
+                  Limit:{' '}
+                  <strong style={{ color: 'var(--foreground)' }}>
+                    {Number(provider.metadata?.creditsTotal ?? 100000).toLocaleString()} credits
+                  </strong>
+                </span>
+              </div>
+
+              <div className="progressTrack" style={{ marginTop: '10px' }}>
+                <div
+                  className="progressFill"
+                  style={{
+                    width: `${Math.min(100, provider.percentUsed ?? 0)}%`,
+                    background: getProgressColor(provider.percentUsed),
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.82rem',
+                  marginTop: '8px',
+                  color: 'var(--muted)',
+                }}
+              >
+                <span>{provider.percentUsed ?? 0}% Used</span>
+                <span>
+                  {Number(
+                    ((provider.metadata?.creditsTotal as number) ?? 100000) -
+                      ((provider.metadata?.creditsUsed as number) ?? 0),
+                  ).toLocaleString()}{' '}
+                  credits remaining
+                </span>
+              </div>
+            </div>
+          ) : provider.provider === 'chatgpt_enterprise' ? (
+            <div className="budgetOverview" style={{ marginTop: '22px', marginBottom: '10px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.88rem',
+                  color: 'var(--muted)',
+                }}
+              >
+                <span>
+                  Used:{' '}
+                  <strong style={{ color: 'var(--foreground)' }}>
+                    {Number(provider.metadata?.creditsUsed ?? 0).toLocaleString()} credits
+                    {provider.spendToday !== null ? (
+                      <span
+                        style={{
+                          color: provider.spendToday > 0 ? 'var(--accent)' : 'var(--muted)',
+                          fontSize: '0.8rem',
+                          fontWeight: 500,
+                          marginLeft: '6px',
+                        }}
+                      >
+                        (+{Number(provider.spendToday).toLocaleString()} credits today)
+                      </span>
+                    ) : null}
                   </strong>
                 </span>
                 <span>
@@ -214,6 +295,18 @@ function ProviderGrid({ providers }: { providers: ProviderUsage[] }) {
                   Used:{' '}
                   <strong style={{ color: 'var(--foreground)' }}>
                     {formatCurrency(((provider.metadata?.requestsUsed as number) ?? 0) / 100)}
+                    {provider.spendToday !== null ? (
+                      <span
+                        style={{
+                          color: provider.spendToday > 0 ? 'var(--accent)' : 'var(--muted)',
+                          fontSize: '0.8rem',
+                          fontWeight: 500,
+                          marginLeft: '6px',
+                        }}
+                      >
+                        (+{formatCurrency(provider.spendToday)} today)
+                      </span>
+                    ) : null}
                   </strong>
                 </span>
                 <span>
@@ -267,6 +360,18 @@ function ProviderGrid({ providers }: { providers: ProviderUsage[] }) {
                   Spent:{' '}
                   <strong style={{ color: 'var(--foreground)' }}>
                     {formatCurrency(provider.spendUsd ?? 0)}
+                    {provider.spendToday !== null ? (
+                      <span
+                        style={{
+                          color: provider.spendToday > 0 ? 'var(--accent)' : 'var(--muted)',
+                          fontSize: '0.8rem',
+                          fontWeight: 500,
+                          marginLeft: '6px',
+                        }}
+                      >
+                        (+{formatCurrency(provider.spendToday)} today)
+                      </span>
+                    ) : null}
                   </strong>
                 </span>
                 {provider.budgetUsd !== null ? (
@@ -319,8 +424,10 @@ function ProviderGrid({ providers }: { providers: ProviderUsage[] }) {
                 .filter(
                   ([key]) =>
                     (provider.provider !== 'chatgpt_enterprise' &&
-                      provider.provider !== 'cursor_pro') ||
-                    key === 'resetsAt',
+                      provider.provider !== 'cursor_pro' &&
+                      provider.provider !== 'github_copilot') ||
+                    key === 'resetsAt' ||
+                    key === 'resetDate',
                 )
                 .map(([key, value]) => (
                   <Metric

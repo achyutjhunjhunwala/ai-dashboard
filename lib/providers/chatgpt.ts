@@ -3,6 +3,7 @@ import path from 'path';
 
 import { getCurrentMonthWindow } from '../dates';
 import type { ProviderUsage } from '../types';
+import { calculateDailySpend } from './daily';
 import type { ProviderAdapter } from './types';
 
 const chatgptUsagePath = path.join(process.cwd(), 'data', 'chatgpt-usage.json');
@@ -74,8 +75,9 @@ export const chatgptAdapter: ProviderAdapter = {
     let creditsUsed = 0;
     let creditsTotal = 5000;
     let resetsAt = '2026-09-02T08:02:00.000Z';
-    let status: ProviderUsage['status'] = 'connected';
-    let syncMessage = 'Local offline integration for ChatGPT enterprise account limits.';
+    let status: ProviderUsage['status'] = 'partial';
+    let syncMessage =
+      'Offline Mode: Using local cache. Configure CHATGPT_ENTERPRISE_COOKIE for real-time sync.';
 
     // Try reading cached file first to have fallbacks
     try {
@@ -134,7 +136,8 @@ export const chatgptAdapter: ProviderAdapter = {
         syncMessage = 'Connected and syncing live credits usage via OpenAI backend API.';
       } catch {
         status = 'error';
-        syncMessage = 'Latest data cannot be fetched as auth expired';
+        syncMessage =
+          'Session cookie or authorization token has expired. Fallen back to static JSON file.';
       }
     }
 
@@ -143,6 +146,8 @@ export const chatgptAdapter: ProviderAdapter = {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(new Date(resetsAt));
+
+    const spendToday = await calculateDailySpend('chatgpt-snapshots.json', creditsUsed);
 
     return {
       provider: 'chatgpt_enterprise',
@@ -153,6 +158,7 @@ export const chatgptAdapter: ProviderAdapter = {
       spendUsd: null,
       remainingUsd: null,
       percentUsed,
+      spendToday,
       projectedMonthEndSpendUsd: null,
       dailySpend: [],
       source: status === 'connected' ? 'api' : 'derived',

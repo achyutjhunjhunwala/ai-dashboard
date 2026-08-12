@@ -4,6 +4,7 @@ import path from 'path';
 import { getCurrentMonthWindow } from '../dates';
 import { calculateBudgetFields, parseMoney, roundMoney } from '../money';
 import type { ProviderUsage } from '../types';
+import { calculateDailySpend } from './daily';
 import type { ProviderAdapter } from './types';
 
 const buildkiteUsagePath = path.join(process.cwd(), 'data', 'buildkite-usage.json');
@@ -88,6 +89,8 @@ export const buildkiteAdapter: ProviderAdapter = {
 
     const budget = calculateBudgetFields(spendUsd, budgetOverride ?? 500); // Default budget override fallback to 500 USD
 
+    const spendToday = await calculateDailySpend('buildkite-snapshots.json', spendUsd);
+
     return {
       provider: 'buildkite',
       displayName: 'Buildkite CI Cost',
@@ -97,6 +100,7 @@ export const buildkiteAdapter: ProviderAdapter = {
       spendUsd,
       remainingUsd: budget.remainingUsd,
       percentUsed: budget.percentUsed,
+      spendToday,
       projectedMonthEndSpendUsd: null,
       dailySpend: [],
       source: status === 'connected' ? 'api' : 'derived',
