@@ -89,28 +89,42 @@ export const claudeAdapter: ProviderAdapter = {
         const rawDebugPath = path.join(process.cwd(), 'data', 'claude-raw-response.json');
         await writeFile(rawDebugPath, JSON.stringify(data, null, 2) + '\n', 'utf8');
 
-        // Extract metrics from totals
-        let totalMinorUnits = 0;
-        if (data && Array.isArray(data.totals)) {
-          for (const item of data.totals) {
-            totalMinorUnits += item.cost_minor_units ?? 0;
+        // Support both /usage and /usage/spend endpoints
+        if (data && data.spend && data.spend.used) {
+          // This is the /usage endpoint response
+          const totalMinorUnits = data.spend.used.amount_minor ?? 0;
+          const exponent = data.spend.used.exponent ?? 2;
+          spendUsd = roundMoney(totalMinorUnits / Math.pow(10, exponent));
+
+          // Auto-detect budget limit from API if not specified in .env
+          if (data.spend.limit && process.env.CLAUDE_MONTHLY_BUDGET_USD === undefined) {
+            const limitMinor = data.spend.limit.amount_minor ?? 0;
+            const limitExponent = data.spend.limit.exponent ?? 2;
+            budgetOverride = roundMoney(limitMinor / Math.pow(10, limitExponent));
           }
-        }
-        spendUsd = roundMoney(totalMinorUnits / 100);
+        } else {
+          // This is the /usage/spend endpoint response
+          let totalMinorUnits = 0;
+          if (data && Array.isArray(data.totals)) {
+            for (const item of data.totals) {
+              totalMinorUnits += item.cost_minor_units ?? 0;
+            }
+          }
+          spendUsd = roundMoney(totalMinorUnits / 100);
 
-        // Sum token metrics and request count from series
-        inputTokens = 0;
-        outputTokens = 0;
-        cacheReadTokens = 0;
-        requestCount = 0;
-
-        if (data && Array.isArray(data.series)) {
-          for (const item of data.series) {
-            requestCount += item.request_count ?? 0;
-            if (item.tokens) {
-              inputTokens += item.tokens.input ?? 0;
-              outputTokens += item.tokens.output ?? 0;
-              cacheReadTokens += item.tokens.cache_read ?? 0;
+          // Sum token metrics and request count from series
+          if (data && Array.isArray(data.series)) {
+            inputTokens = 0;
+            outputTokens = 0;
+            cacheReadTokens = 0;
+            requestCount = 0;
+            for (const item of data.series) {
+              requestCount += item.request_count ?? 0;
+              if (item.tokens) {
+                inputTokens += item.tokens.input ?? 0;
+                outputTokens += item.tokens.output ?? 0;
+                cacheReadTokens += item.tokens.cache_read ?? 0;
+              }
             }
           }
         }
