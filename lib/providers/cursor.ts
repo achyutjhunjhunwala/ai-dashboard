@@ -165,7 +165,7 @@ export const cursorAdapter: ProviderAdapter = {
     const budgetUsd = Math.round((requestsTotal / 100) * 100) / 100;
     const remainingUsd = Math.round((budgetUsd - spendUsd) * 100) / 100;
 
-    const spendToday = await calculateDailySpend('cursor-snapshots.json', spendUsd);
+    const spendToday = await calculateDailySpend('cursor-snapshots.json', spendUsd, startDate);
 
     return {
       provider: 'cursor_pro',

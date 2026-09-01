@@ -89,7 +89,7 @@ export const buildkiteAdapter: ProviderAdapter = {
 
     const budget = calculateBudgetFields(spendUsd, budgetOverride ?? 500); // Default budget override fallback to 500 USD
 
-    const spendToday = await calculateDailySpend('buildkite-snapshots.json', spendUsd);
+    const spendToday = await calculateDailySpend('buildkite-snapshots.json', spendUsd, startDate);
 
     return {
       provider: 'buildkite',

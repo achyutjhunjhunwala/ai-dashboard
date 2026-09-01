@@ -155,7 +155,7 @@ export const copilotAdapter: ProviderAdapter = {
     const spendUsd = roundMoney(creditsUsed * 0.01);
     const budgetUsd = roundMoney(creditsTotal * 0.01);
     const budget = calculateBudgetFields(spendUsd, budgetUsd);
-    const spendToday = await calculateDailySpend('copilot-snapshots.json', spendUsd);
+    const spendToday = await calculateDailySpend('copilot-snapshots.json', spendUsd, startDate);
 
     return {
       provider: 'github_copilot',

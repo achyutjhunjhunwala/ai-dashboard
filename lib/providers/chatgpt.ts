@@ -172,7 +172,7 @@ export const chatgptAdapter: ProviderAdapter = {
       timeStyle: 'short',
     }).format(new Date(resetsAt));
 
-    const spendToday = await calculateDailySpend('chatgpt-snapshots.json', creditsUsed);
+    const spendToday = await calculateDailySpend('chatgpt-snapshots.json', creditsUsed, startDate);
 
     return {
       provider: 'chatgpt_enterprise',

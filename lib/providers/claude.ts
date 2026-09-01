@@ -150,7 +150,7 @@ export const claudeAdapter: ProviderAdapter = {
 
     const budget = calculateBudgetFields(spendUsd, budgetOverride);
 
-    const spendToday = await calculateDailySpend('claude-snapshots.json', spendUsd);
+    const spendToday = await calculateDailySpend('claude-snapshots.json', spendUsd, startDate);
 
     return {
       provider: 'claude',

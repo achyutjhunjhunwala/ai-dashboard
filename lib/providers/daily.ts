@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
 
+import { getCurrentMonthWindow } from '../dates';
 import { roundMoney } from '../money';
 
 type DailySnapshot = {
@@ -12,8 +13,10 @@ type DailySnapshot = {
 export async function calculateDailySpend(
   snapshotFileName: string,
   currentValue: number,
+  billingPeriodStart?: string,
 ): Promise<number> {
   const todayStr = new Date().toISOString().slice(0, 10);
+  const periodStart = billingPeriodStart ?? getCurrentMonthWindow().startDate;
   const snapshotFilePath = path.join(process.cwd(), 'data', snapshotFileName);
 
   const snapshot: DailySnapshot = {
@@ -40,12 +43,20 @@ export async function calculateDailySpend(
   await mkdir(path.dirname(snapshotFilePath), { recursive: true });
   await writeFile(snapshotFilePath, JSON.stringify(updatedSnapshots, null, 2) + '\n', 'utf8');
 
-  // Find yesterday's or previous day's last snapshot
-  const priorSnapshots = updatedSnapshots.filter((s) => s.date < todayStr);
-  if (priorSnapshots.length === 0) {
-    return 0; // No baseline to compare, today's spend is 0
+  // Find snapshots within the current billing cycle before today
+  const priorSnapshotsInCycle = updatedSnapshots.filter(
+    (s) => s.date >= periodStart && s.date < todayStr,
+  );
+
+  if (priorSnapshotsInCycle.length === 0) {
+    // No prior baseline within current billing cycle - baseline was 0 at cycle start
+    return roundMoney(currentValue);
   }
 
-  const lastPrior = priorSnapshots[priorSnapshots.length - 1];
-  return Math.max(0, roundMoney(currentValue - lastPrior.value));
+  const lastPrior = priorSnapshotsInCycle[priorSnapshotsInCycle.length - 1];
+  if (currentValue < lastPrior.value) {
+    return roundMoney(currentValue);
+  }
+
+  return roundMoney(currentValue - lastPrior.value);
 }
