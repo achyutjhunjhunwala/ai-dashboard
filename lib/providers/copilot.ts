@@ -35,7 +35,12 @@ function formatResetDate(dateStr: string): string {
   try {
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) {
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
     }
   } catch {}
   return dateStr;
@@ -44,7 +49,7 @@ function formatResetDate(dateStr: string): string {
 export const copilotAdapter: ProviderAdapter = {
   id: 'github_copilot',
   async syncCurrentMonth(): Promise<ProviderUsage> {
-    const { startDate, endDate } = getCurrentMonthWindow();
+    const { end, startDate, endDate } = getCurrentMonthWindow();
 
     const cookie = process.env.GITHUB_COPILOT_COOKIE;
     const authorization = process.env.GITHUB_COPILOT_AUTHORIZATION;
@@ -52,7 +57,7 @@ export const copilotAdapter: ProviderAdapter = {
 
     let creditsUsed = 0;
     let creditsTotal = 100000;
-    let resetDate = 'Aug 31, 2026';
+    let resetDate = formatResetDate(end.toISOString());
     let status: ProviderUsage['status'] = 'partial';
     let syncMessage =
       'Offline Mode: Using local cache. Configure GITHUB_COPILOT_COOKIE or GITHUB_COPILOT_AUTHORIZATION for real-time sync.';
@@ -63,7 +68,10 @@ export const copilotAdapter: ProviderAdapter = {
       const parsed = JSON.parse(raw) as CopilotUsageData;
       creditsUsed = parsed.creditsUsed ?? 0;
       creditsTotal = parsed.creditsTotal ?? 100000;
-      resetDate = parsed.resetDate ?? 'Aug 31, 2026';
+      resetDate = parsed.resetDate ?? formatResetDate(end.toISOString());
+      if (new Date(resetDate) <= new Date()) {
+        resetDate = formatResetDate(end.toISOString());
+      }
     } catch {
       // Default initial write if file missing
       await mkdir(path.dirname(copilotUsagePath), { recursive: true });
@@ -117,8 +125,9 @@ export const copilotAdapter: ProviderAdapter = {
             creditsTotal = data.quotas.limits.premiumInteractions;
           }
 
-          if (data.quotas.resetDate) {
-            resetDate = formatResetDate(data.quotas.resetDate);
+          const apiResetDate = data.quotas.resetDateUtc || data.quotas.resetDate;
+          if (apiResetDate) {
+            resetDate = formatResetDate(apiResetDate);
           }
         }
 

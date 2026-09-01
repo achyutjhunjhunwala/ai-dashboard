@@ -510,7 +510,9 @@ function formatMetadataValue(key: string, value: string | number | null) {
       lowerKey.includes('balance') ||
       lowerKey.includes('budget') ||
       lowerKey.includes('override') ||
-      lowerKey.includes('cost');
+      lowerKey.includes('cost') ||
+      lowerKey.includes('limit') ||
+      lowerKey.includes('remaining');
 
     return isMoney ? formatCurrency(value) : value.toLocaleString('en-US');
   }

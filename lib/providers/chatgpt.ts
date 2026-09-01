@@ -20,10 +20,16 @@ interface ChatGPTMetricInput {
   max_usage?: number | null;
   monthly_usage_limit?: number | null;
   limit_mode_value?: string | number | null;
+  effective_monthly_limit?: {
+    limit?: number | null;
+    enforcement_mode?: string | null;
+    limit_mode?: string | null;
+  } | null;
   usage?: number | null;
   credits_used?: number | null;
   current_usage?: number | null;
   monthly_usage_value?: number | null;
+  current_month_usage?: number | null;
   reset_at?: string | null;
   resets_at?: string | null;
   period_end?: string | null;
@@ -35,23 +41,39 @@ function extractChatGPTMetrics(data: ChatGPTMetricInput | null | undefined): {
   creditsTotal: number;
   resetsAt: string;
 } {
+  const { end } = getCurrentMonthWindow();
   let creditsTotal = 5000;
   let creditsUsed = 0;
-  let resetsAt = '2026-09-02T08:02:00.000Z';
+  let resetsAt = end.toISOString();
 
   if (data) {
     // 1. Total Limit (Check common paths)
-    if (typeof data.limit === 'number') creditsTotal = data.limit;
-    else if (typeof data.credits_total === 'number') creditsTotal = data.credits_total;
-    else if (typeof data.max_usage === 'number') creditsTotal = data.max_usage;
-    else if (typeof data.monthly_usage_limit === 'number') creditsTotal = data.monthly_usage_limit;
-    else if (data.limit_mode_value !== undefined) creditsTotal = Number(data.limit_mode_value);
+    if (typeof data.effective_monthly_limit?.limit === 'number') {
+      creditsTotal = data.effective_monthly_limit.limit;
+    } else if (typeof data.limit === 'number') {
+      creditsTotal = data.limit;
+    } else if (typeof data.credits_total === 'number') {
+      creditsTotal = data.credits_total;
+    } else if (typeof data.max_usage === 'number') {
+      creditsTotal = data.max_usage;
+    } else if (typeof data.monthly_usage_limit === 'number') {
+      creditsTotal = data.monthly_usage_limit;
+    } else if (data.limit_mode_value !== undefined) {
+      creditsTotal = Number(data.limit_mode_value);
+    }
 
     // 2. Used credits
-    if (typeof data.usage === 'number') creditsUsed = data.usage;
-    else if (typeof data.credits_used === 'number') creditsUsed = data.credits_used;
-    else if (typeof data.current_usage === 'number') creditsUsed = data.current_usage;
-    else if (typeof data.monthly_usage_value === 'number') creditsUsed = data.monthly_usage_value;
+    if (typeof data.current_month_usage === 'number') {
+      creditsUsed = data.current_month_usage;
+    } else if (typeof data.usage === 'number') {
+      creditsUsed = data.usage;
+    } else if (typeof data.credits_used === 'number') {
+      creditsUsed = data.credits_used;
+    } else if (typeof data.current_usage === 'number') {
+      creditsUsed = data.current_usage;
+    } else if (typeof data.monthly_usage_value === 'number') {
+      creditsUsed = data.monthly_usage_value;
+    }
 
     // 3. Reset Date
     if (data.reset_at) resetsAt = data.reset_at;
@@ -66,7 +88,7 @@ function extractChatGPTMetrics(data: ChatGPTMetricInput | null | undefined): {
 export const chatgptAdapter: ProviderAdapter = {
   id: 'chatgpt_enterprise',
   async syncCurrentMonth(): Promise<ProviderUsage> {
-    const { startDate, endDate } = getCurrentMonthWindow();
+    const { end, startDate, endDate } = getCurrentMonthWindow();
 
     const apiUrl = process.env.CHATGPT_ENTERPRISE_API_URL;
     const cookie = process.env.CHATGPT_ENTERPRISE_COOKIE;
@@ -74,7 +96,7 @@ export const chatgptAdapter: ProviderAdapter = {
 
     let creditsUsed = 0;
     let creditsTotal = 5000;
-    let resetsAt = '2026-09-02T08:02:00.000Z';
+    let resetsAt = end.toISOString();
     let status: ProviderUsage['status'] = 'partial';
     let syncMessage =
       'Offline Mode: Using local cache. Configure CHATGPT_ENTERPRISE_COOKIE for real-time sync.';
@@ -85,7 +107,10 @@ export const chatgptAdapter: ProviderAdapter = {
       const parsed = JSON.parse(raw) as ChatGPTUsageData;
       creditsUsed = parsed.creditsUsed ?? 0;
       creditsTotal = parsed.creditsTotal ?? 5000;
-      resetsAt = parsed.resetsAt ?? '2026-09-02T08:02:00.000Z';
+      resetsAt = parsed.resetsAt ?? end.toISOString();
+      if (new Date(resetsAt) <= new Date()) {
+        resetsAt = end.toISOString();
+      }
     } catch {
       // Default initial write if file missing
       await mkdir(path.dirname(chatgptUsagePath), { recursive: true });

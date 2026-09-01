@@ -16,10 +16,23 @@ type OpenRouterCreditsResponse = {
 
 type OpenRouterKeyResponse = {
   data?: {
-    usage?: number;
-    byok_usage?: number;
+    label?: string;
+    is_management_key?: boolean;
+    is_provisioning_key?: boolean;
     limit?: number | null;
     limit_remaining?: number | null;
+    limit_reset?: string | null;
+    include_byok_in_limit?: boolean;
+    usage?: number;
+    usage_daily?: number;
+    usage_weekly?: number;
+    usage_monthly?: number;
+    byok_usage?: number;
+    byok_usage_daily?: number;
+    byok_usage_weekly?: number;
+    byok_usage_monthly?: number;
+    is_free_tier?: boolean;
+    expires_at?: string | null;
   };
 };
 
@@ -47,8 +60,11 @@ type OpenRouterKeySpend = {
   keyCreditsSpend: number;
   keyByokSpend: number;
   keyLifetimeSpend: number;
+  keyMonthlySpend: number | null;
+  keyDailySpend: number | null;
   keyLimit: number | null;
   keyLimitRemaining: number | null;
+  keyLimitReset: string | null;
 };
 
 type OpenRouterActivitySummary = {
@@ -104,23 +120,14 @@ function createOpenRouterAdapter(
     async syncCurrentMonth() {
       const apiKey = process.env[`OPENROUTER_API_KEY${envSuffix}`];
       const managementApiKey = process.env[`OPENROUTER_MANAGEMENT_API_KEY${envSuffix}`];
-      let budgetOverride = parseMoney(process.env[`OPENROUTER_MONTHLY_BUDGET_USD${envSuffix}`]);
-
-      // Default limits if unset in .env
-      if (budgetOverride === null) {
-        if (isBase)
-          budgetOverride = 1000; // Default main OpenRouter to 1000 USD
-        else if (keySuffix === '1')
-          budgetOverride = 500; // Default OpenRouter - 1 limit to 500
-        else if (keySuffix === '2') budgetOverride = 500; // Default OpenRouter - 2 limit to 500
-      }
+      const budgetOverride = parseMoney(process.env[`OPENROUTER_MONTHLY_BUDGET_USD${envSuffix}`]);
 
       const authKey = apiKey ?? managementApiKey;
       const { startDate, endDate } = getCurrentMonthWindow();
 
       if (!authKey) {
         return createOpenRouterUsage(providerId, displayName, {
-          budgetUsd: budgetOverride,
+          budgetUsd: budgetOverride ?? (isBase ? 1000 : 500),
           spendUsd: null,
           spendToday: null,
           dailySpend: [],
@@ -135,6 +142,18 @@ function createOpenRouterAdapter(
       try {
         const keySpend = apiKey ? await fetchKeySpend(apiKey) : null;
         const credits = await fetchCredits(authKey).catch(() => null);
+
+        let budgetUsd = budgetOverride;
+        if (budgetUsd === null) {
+          if (typeof keySpend?.keyLimit === 'number' && keySpend.keyLimit > 0) {
+            budgetUsd = keySpend.keyLimit;
+          } else if (isBase) {
+            budgetUsd = 1000;
+          } else {
+            budgetUsd = 500;
+          }
+        }
+
         const snapshotSummary = keySpend
           ? await saveAndSummarizeKeySpendSnapshot(
               keySnapshotFile,
@@ -143,6 +162,7 @@ function createOpenRouterAdapter(
               endDate,
             )
           : { spendUsd: null, spendToday: null, dailySpend: [] };
+
         const activity = managementApiKey
           ? await fetchActivity(managementApiKey, startDate, endDate)
           : ({
@@ -151,19 +171,34 @@ function createOpenRouterAdapter(
                 `Set OPENROUTER_MANAGEMENT_API_KEY${envSuffix} to fetch monthly activity. A normal OpenRouter API key can only show credit totals.`,
               ),
             } satisfies ActivityFetchResult);
-        const budgetUsd = budgetOverride;
-        const spendUsd = activity.ok
-          ? activity.summary.spendUsd
-          : (keySpend?.keyLifetimeSpend ?? null);
+
+        let spendUsd: number | null = null;
+        if (activity.ok) {
+          spendUsd = activity.summary.spendUsd;
+        } else if (keySpend?.keyMonthlySpend !== null && keySpend?.keyMonthlySpend !== undefined) {
+          spendUsd = keySpend.keyMonthlySpend;
+        } else if (snapshotSummary.spendUsd !== null) {
+          spendUsd = snapshotSummary.spendUsd;
+        } else if (keySpend) {
+          spendUsd = keySpend.keyLifetimeSpend;
+        }
+
+        const spendToday =
+          keySpend?.keyDailySpend !== null && keySpend?.keyDailySpend !== undefined
+            ? keySpend.keyDailySpend
+            : snapshotSummary.spendToday;
+
         const dailySpend = activity.ok ? activity.summary.dailySpend : snapshotSummary.dailySpend;
+
+        const isConnected = activity.ok || keySpend !== null;
 
         return createOpenRouterUsage(providerId, displayName, {
           budgetUsd,
           spendUsd,
-          spendToday: snapshotSummary.spendToday,
+          spendToday,
           dailySpend,
           modelBreakdown: activity.ok ? activity.summary.modelBreakdown : [],
-          status: activity.ok ? 'connected' : 'partial',
+          status: isConnected ? 'connected' : 'partial',
           message: undefined,
           promptTokens: activity.ok ? activity.summary.promptTokens : undefined,
           completionTokens: activity.ok ? activity.summary.completionTokens : undefined,
@@ -171,13 +206,16 @@ function createOpenRouterAdapter(
           requestCount: activity.ok ? activity.summary.requestCount : undefined,
           metadata: {
             keyLifetimeSpend: keySpend?.keyLifetimeSpend ?? null,
+            keyMonthlySpend: keySpend?.keyMonthlySpend ?? null,
+            keyLimitRemaining: keySpend?.keyLimitRemaining ?? null,
             totalCredits: credits?.totalCredits ?? null,
             lifetimeUsage: credits?.lifetimeUsage ?? null,
+            creditBalance: credits?.creditBalance ?? null,
           },
         });
       } catch (error) {
         return createOpenRouterUsage(providerId, displayName, {
-          budgetUsd: budgetOverride,
+          budgetUsd: budgetOverride ?? (isBase ? 1000 : 500),
           spendUsd: null,
           spendToday: null,
           dailySpend: [],
@@ -241,15 +279,30 @@ async function fetchKeySpend(apiKey: string): Promise<OpenRouterKeySpend> {
     },
   });
 
-  const keyCreditsSpend = roundMoney(keyInfo.data?.usage ?? 0);
-  const keyByokSpend = roundMoney(keyInfo.data?.byok_usage ?? 0);
+  const data = keyInfo.data;
+  const keyCreditsSpend = roundMoney(data?.usage ?? 0);
+  const keyByokSpend = roundMoney(data?.byok_usage ?? 0);
+  const keyLifetimeSpend = roundMoney(keyCreditsSpend + keyByokSpend);
+
+  const hasMonthlyUsage = typeof data?.usage_monthly === 'number';
+  const keyMonthlySpend = hasMonthlyUsage
+    ? roundMoney((data.usage_monthly ?? 0) + (data?.byok_usage_monthly ?? 0))
+    : null;
+
+  const hasDailyUsage = typeof data?.usage_daily === 'number';
+  const keyDailySpend = hasDailyUsage
+    ? roundMoney((data.usage_daily ?? 0) + (data?.byok_usage_daily ?? 0))
+    : null;
 
   return {
     keyCreditsSpend,
     keyByokSpend,
-    keyLifetimeSpend: roundMoney(keyCreditsSpend + keyByokSpend),
-    keyLimit: keyInfo.data?.limit ?? null,
-    keyLimitRemaining: keyInfo.data?.limit_remaining ?? null,
+    keyLifetimeSpend,
+    keyMonthlySpend,
+    keyDailySpend,
+    keyLimit: typeof data?.limit === 'number' ? data.limit : null,
+    keyLimitRemaining: typeof data?.limit_remaining === 'number' ? data.limit_remaining : null,
+    keyLimitReset: data?.limit_reset ?? null,
   };
 }
 

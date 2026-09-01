@@ -80,14 +80,14 @@ function extractCursorSummaryMetrics(data: CursorSummaryInput | null | undefined
 export const cursorAdapter: ProviderAdapter = {
   id: 'cursor_pro',
   async syncCurrentMonth(): Promise<ProviderUsage> {
-    const { startDate, endDate } = getCurrentMonthWindow();
+    const { end, startDate, endDate } = getCurrentMonthWindow();
 
     const apiUrl = process.env.CURSOR_API_URL;
     const cookie = process.env.CURSOR_COOKIE;
 
     let requestsUsed = 0;
     let requestsTotal = 100000;
-    let resetsAt = '2026-09-02T08:02:00.000Z';
+    let resetsAt = end.toISOString();
     let status: ProviderUsage['status'] = 'partial';
     let syncMessage =
       'Offline Mode: Using local cache. Configure CURSOR_COOKIE for real-time sync.';
@@ -98,7 +98,10 @@ export const cursorAdapter: ProviderAdapter = {
       const parsed = JSON.parse(raw) as CursorUsageData;
       requestsUsed = parsed.requestsUsed ?? 0;
       requestsTotal = parsed.requestsTotal ?? 500;
-      resetsAt = parsed.resetsAt ?? '2026-09-02T08:02:00.000Z';
+      resetsAt = parsed.resetsAt ?? end.toISOString();
+      if (new Date(resetsAt) <= new Date()) {
+        resetsAt = end.toISOString();
+      }
     } catch {
       // Default initial write if file missing
       await mkdir(path.dirname(cursorUsagePath), { recursive: true });
