@@ -1,7 +1,12 @@
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
 
-import { getCurrentMonthWindow, projectMonthEndSpend } from '../dates';
+import {
+  getCurrentMonthWindow,
+  getTodayDateString,
+  getYesterdayDateString,
+  projectMonthEndSpend,
+} from '../dates';
 import { calculateBudgetFields, parseMoney, roundMoney } from '../money';
 import type { DailySpend, ModelBreakdown, ProviderUsage } from '../types';
 import { fetchJson } from './http';
@@ -96,6 +101,8 @@ type KeySpendSnapshot = {
   capturedAt: string;
   date: string;
   keyLifetimeSpend: number;
+  firstCapturedAt?: string;
+  firstKeyLifetimeSpend?: number;
 };
 
 const keySnapshotPath = path.join(process.cwd(), 'data', 'openrouter-key-snapshots.json');
@@ -425,27 +432,40 @@ async function saveAndSummarizeKeySpendSnapshot(
   startDate: string,
   endDate: string,
 ) {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const snapshot = {
+  const todayStr = getTodayDateString();
+  const yesterdayStr = getYesterdayDateString();
+  const existing = await readKeySpendSnapshots(keySnapshotFile);
+  const existingToday = existing.find((item) => item.date === todayStr);
+
+  const firstKeyLifetimeSpend =
+    existingToday?.firstKeyLifetimeSpend ?? existingToday?.keyLifetimeSpend ?? keyLifetimeSpend;
+  const firstCapturedAt =
+    existingToday?.firstCapturedAt ?? existingToday?.capturedAt ?? new Date().toISOString();
+
+  const snapshot: KeySpendSnapshot = {
     capturedAt: new Date().toISOString(),
     date: todayStr,
     keyLifetimeSpend,
+    firstCapturedAt,
+    firstKeyLifetimeSpend,
   };
   const snapshots = await saveKeySpendSnapshot(keySnapshotFile, snapshot);
   const monthSnapshots = snapshots.filter((item) => item.date >= startDate && item.date < endDate);
 
-  const todaySnapshots = monthSnapshots.filter((item) => item.date === todayStr);
+  const priorSnapshots = snapshots.filter((item) => item.date >= startDate && item.date < todayStr);
+  const yesterdaySnapshot = priorSnapshots.find((item) => item.date === yesterdayStr);
+
   let spendToday = 0;
-  if (todaySnapshots.length > 0) {
-    const latestToday = todaySnapshots[todaySnapshots.length - 1];
-    const priorSnapshots = snapshots.filter((item) => item.date < todayStr);
-    if (priorSnapshots.length > 0) {
-      const lastPrior = priorSnapshots[priorSnapshots.length - 1];
-      spendToday = Math.max(
-        0,
-        roundMoney(latestToday.keyLifetimeSpend - lastPrior.keyLifetimeSpend),
-      );
+  if (todayStr === startDate) {
+    if (monthSnapshots.length >= 2) {
+      spendToday = Math.max(0, roundMoney(keyLifetimeSpend - monthSnapshots[0].keyLifetimeSpend));
+    } else {
+      spendToday = Math.max(0, roundMoney(keyLifetimeSpend - firstKeyLifetimeSpend));
     }
+  } else if (yesterdaySnapshot) {
+    spendToday = Math.max(0, roundMoney(keyLifetimeSpend - yesterdaySnapshot.keyLifetimeSpend));
+  } else {
+    spendToday = Math.max(0, roundMoney(keyLifetimeSpend - firstKeyLifetimeSpend));
   }
 
   if (monthSnapshots.length < 2) {

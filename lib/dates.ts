@@ -14,6 +14,17 @@ export function toDateOnly(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+export function getYesterdayDateString(now = new Date()): string {
+  const yesterday = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1),
+  );
+  return toDateOnly(yesterday);
+}
+
+export function getTodayDateString(now = new Date()): string {
+  return toDateOnly(now);
+}
+
 export function getDaysElapsedInMonth(now = new Date()) {
   return now.getUTCDate();
 }
