@@ -464,7 +464,12 @@ async function saveAndSummarizeKeySpendSnapshot(
     }
   } else if (yesterdaySnapshot) {
     spendToday = Math.max(0, roundMoney(keyLifetimeSpend - yesterdaySnapshot.keyLifetimeSpend));
+  } else if (priorSnapshots.length > 0) {
+    // Multi-day gap: use the most recent prior snapshot
+    const lastPrior = priorSnapshots[priorSnapshots.length - 1];
+    spendToday = Math.max(0, roundMoney(keyLifetimeSpend - lastPrior.keyLifetimeSpend));
   } else {
+    // No prior snapshots at all: use today's opening baseline
     spendToday = Math.max(0, roundMoney(keyLifetimeSpend - firstKeyLifetimeSpend));
   }
 

@@ -73,7 +73,13 @@ export async function calculateDailySpend(
     return roundMoney(Math.max(0, currentValue - yesterdaySnapshot.value));
   }
 
-  // 3. If there is no snapshot from yesterday (first time loading in this cycle, or multi-day gap):
-  // Compare against today's initial opening snapshot rather than assuming 0 spend at month start.
+  // 3. Multi-day gap: use the most recent prior snapshot's closing value as baseline
+  if (priorSnapshotsInCycle.length > 0) {
+    const lastPrior = priorSnapshotsInCycle[priorSnapshotsInCycle.length - 1];
+    return roundMoney(Math.max(0, currentValue - lastPrior.value));
+  }
+
+  // 4. No prior snapshots at all in this cycle (first time loading mid-cycle):
+  // Use today's opening baseline so first load shows $0, subsequent loads show delta.
   return roundMoney(Math.max(0, currentValue - firstValue));
 }
